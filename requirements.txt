@@ -1,0 +1,4 @@
+# Web 服务依赖（可选，Excel 导出需要）
+flask>=2.0
+pdfplumber>=0.10
+openpyxl>=3.0

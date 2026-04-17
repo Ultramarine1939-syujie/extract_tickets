@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>国铁电子客票解析工具</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#1677ff;--blue-h:#0958d9;--blue-l:#e6f4ff;
+  --green:#52c41a;--orange:#fa8c16;--red:#ff4d4f;--purple:#722ed1;
+  --bg:#f0f2f5;--card:#fff;--border:#e8e8e8;
+  --text:#1d1d1f;--t2:#595959;--muted:#8c8c8c;
+  --r:12px;--s:0 2px 8px rgba(0,0,0,.07);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── Header ── */
+header{background:linear-gradient(135deg,#1677ff,#0958d9);padding:18px 32px;
+  display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(22,119,255,.3)}
+header .logo{font-size:30px}
+header h1{color:#fff;font-size:20px;font-weight:700}
+header p{color:rgba(255,255,255,.75);font-size:13px;margin-top:2px}
+
+/* ── Layout ── */
+main{max-width:1300px;margin:26px auto;padding:0 24px}
+
+/* ── Card ── */
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--s);margin-bottom:20px}
+.card-hd{display:flex;align-items:center;justify-content:space-between;
+  padding:13px 20px;border-bottom:1px solid var(--border)}
+.card-hd h2{font-size:15px;font-weight:600}
+.card-bd{padding:20px}
+
+/* ── Dropzone ── */
+.dz{border:2px dashed var(--border);border-radius:10px;padding:40px 20px;
+  text-align:center;cursor:pointer;transition:.2s;background:#fafafa;position:relative}
+.dz.over{border-color:var(--blue);background:var(--blue-l)}
+.dz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.dz-icon{font-size:44px;margin-bottom:10px}
+.dz-hint{font-size:15px;margin-bottom:4px}
+.dz-hint span{color:var(--blue);font-weight:500}
+.dz-sub{font-size:13px;color:var(--muted)}
+
+/* ── File list ── */
+#file-list{margin-top:14px;display:flex;flex-direction:column;gap:7px;
+  max-height:220px;overflow-y:auto}
+.fi{display:flex;align-items:center;gap:10px;background:#f6f8fa;
+  border-radius:8px;padding:9px 12px;font-size:13px}
+.fi-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fi-size{color:var(--muted);flex-shrink:0}
+.fi-st{flex-shrink:0;font-size:12px;min-width:48px;text-align:right}
+.fi-rm{background:none;border:none;color:var(--muted);cursor:pointer;
+  padding:2px 6px;border-radius:4px;font-size:15px;transition:color .15s}
+.fi-rm:hover{color:var(--red)}
+
+/* ── Buttons ── */
+.action-bar{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;
+  border-radius:8px;font-size:14px;font-weight:500;border:none;cursor:pointer;
+  transition:all .15s;white-space:nowrap}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-blue{background:var(--blue);color:#fff}.btn-blue:not(:disabled):hover{background:var(--blue-h)}
+.btn-green{background:var(--green);color:#fff}.btn-green:not(:disabled):hover{background:#389e0d}
+.btn-teal{background:#13c2c2;color:#fff}.btn-teal:not(:disabled):hover{background:#08979c}
+.btn-ghost{background:#fff;color:var(--text);border:1px solid var(--border)}
+.btn-ghost:not(:disabled):hover{border-color:var(--blue);color:var(--blue)}
+#status-msg{font-size:13px;color:var(--muted)}
+
+/* ── Progress ── */
+#prog-wrap{margin-top:14px;display:none}
+.pb-bg{background:#f0f0f0;border-radius:4px;height:6px;overflow:hidden}
+.pb-fill{background:var(--blue);height:6px;border-radius:4px;
+  transition:width .25s;width:0}
+#prog-text{font-size:12px;color:var(--muted);margin-top:5px}
+
+/* ── Summary ── */
+#summary{display:none;background:var(--card);border-radius:var(--r);
+  box-shadow:var(--s);margin-bottom:20px;flex-wrap:wrap}
+.si{flex:1;min-width:110px;text-align:center;padding:14px 16px;
+  border-right:1px solid var(--border)}
+.si:last-child{border-right:none}
+.si .val{font-size:26px;font-weight:700}
+.si .lbl{font-size:12px;color:var(--muted);margin-top:3px}
+
+/* ── Search bar ── */
+#search-bar{display:none;align-items:center;gap:10px;
+  padding:10px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+#search-input{flex:1;min-width:160px;padding:7px 12px;border:1px solid var(--border);
+  border-radius:8px;font-size:13px;outline:none;transition:border-color .2s}
+#search-input:focus{border-color:var(--blue)}
+.fsel{padding:7px 10px;border:1px solid var(--border);border-radius:8px;
+  font-size:13px;outline:none;background:#fff;cursor:pointer}
+.fsel:focus{border-color:var(--blue)}
+
+/* ── Table ── */
+#result-card{display:none}
+.tbl-wrap{overflow-x:auto;max-height:520px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#fafafa;padding:10px 13px;text-align:left;font-weight:600;
+  color:var(--t2);white-space:nowrap;border-bottom:1px solid var(--border);
+  cursor:pointer;user-select:none;position:sticky;top:0;z-index:1}
+th:hover{color:var(--blue)}
+th .sa{font-size:10px;margin-left:3px;color:var(--muted)}
+th.asc .sa::after{content:"▲";color:var(--blue)}
+th.desc .sa::after{content:"▼";color:var(--blue)}
+th:not(.asc):not(.desc) .sa::after{content:"⇅"}
+td{padding:10px 13px;border-bottom:1px solid #f5f5f5;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f5f9ff;cursor:pointer}
+.td-file{color:var(--t2);max-width:80px;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.td-price{font-weight:700;color:var(--blue)}
+.act-btn{background:none;border:none;color:var(--blue);cursor:pointer;
+  font-size:12px;padding:3px 8px;border-radius:5px;transition:background .15s}
+.act-btn:hover{background:var(--blue-l)}
+.no-data{text-align:center;padding:48px;color:var(--muted);font-size:14px}
+
+/* ── Badges ── */
+.badge{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:500}
+.bg{background:#e6f4ff;color:#1677ff}
+.bc{background:#fff7e6;color:#d46b08}
+.bd{background:#f6ffed;color:#389e0d}
+.bk{background:#fff1f0;color:#cf1322}
+.bo{background:#f5f5f5;color:#595959}
+.bs{background:#fff7e6;color:#d46b08}
+.nt{display:inline-block;padding:1px 6px;border-radius:4px;
+  font-size:11px;background:#fff2f0;color:#ff4d4f;margin-right:3px}
+.nt.student{background:#f6ffed;color:#52c41a}
+
+/* ── Table footer ── */
+#tbl-foot{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px;border-top:1px solid var(--border);
+  font-size:13px;color:var(--muted);flex-wrap:wrap;gap:8px}
+
+/* ── Charts ── */
+#chart-sec{display:none}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+.cc{background:var(--card);border-radius:var(--r);box-shadow:var(--s);padding:20px}
+.cc h3{font-size:14px;font-weight:600;margin-bottom:14px;color:var(--t2)}
+.cw{position:relative;height:220px}
+
+/* ── Modal ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
+  z-index:999;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:var(--r);width:100%;max-width:600px;
+  max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);
+  animation:pop .18s ease}
+@keyframes pop{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+.mo-hd{display:flex;align-items:center;justify-content:space-between;
+  padding:15px 20px;border-bottom:1px solid var(--border)}
+.mo-hd h3{font-size:16px;font-weight:600}
+.mo-close{background:none;border:none;font-size:20px;cursor:pointer;
+  color:var(--muted);padding:4px 8px;border-radius:6px}
+.mo-close:hover{color:var(--text)}
+.mo-bd{padding:20px}
+.dg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.di{background:#fafafa;border-radius:8px;padding:10px 14px}
+.di.full{grid-column:1/-1}
+.di .lbl{font-size:11px;color:var(--muted);margin-bottom:4px}
+.di .val{font-size:14px;font-weight:500;word-break:break-all}
+
+@media(max-width:768px){.cg{grid-template-columns:1fr}}
+@media(max-width:640px){
+  main{padding:0 12px}
+  header{padding:14px 16px}
+  .si{min-width:80px}
+  .dg{grid-template-columns:1fr}
+  .di.full{grid-column:auto}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🚄</div>
+  <div>
+    <h1>国铁电子客票解析工具</h1>
+    <p>上传 PDF 发票，自动提取信息 · 排序筛选 · 图表统计 · 导出 CSV / Excel</p>
+  </div>
+</header>
+
+<main>
+  <!-- 上传区 -->
+  <div class="card">
+    <div class="card-hd"><h2>📁 上传发票文件</h2></div>
+    <div class="card-bd">
+      <div class="dz" id="dropzone">
+        <input type="file" id="file-input" accept=".pdf" multiple/>
+        <div class="dz-icon">📄</div>
+        <div class="dz-hint"><span>点击选择</span> 或将 PDF 文件拖拽至此</div>
+        <div class="dz-sub">支持批量上传 · 仅限 .pdf 格式 · 最大 100 MB</div>
+      </div>
+      <div id="file-list"></div>
+      <div class="action-bar">
+        <button class="btn btn-blue"  id="btn-parse"    disabled>🔍 开始解析</button>
+        <button class="btn btn-green" id="btn-dl-csv"   disabled>⬇ 导出 CSV</button>
+        <button class="btn btn-teal"  id="btn-dl-excel" disabled>📊 导出 Excel</button>
+        <button class="btn btn-ghost" id="btn-clear">🗑 清空</button>
+        <span id="status-msg"></span>
+      </div>
+      <div id="prog-wrap">
+        <div class="pb-bg"><div class="pb-fill" id="pb-fill"></div></div>
+        <div id="prog-text">正在解析...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 统计栏 -->
+  <div id="summary" style="display:none">
+    <div class="si"><div class="val" id="s-total" style="color:var(--blue)">0</div><div class="lbl">共解析</div></div>
+    <div class="si"><div class="val" id="s-ok"    style="color:var(--green)">0</div><div class="lbl">成功提取</div></div>
+    <div class="si"><div class="val" id="s-skip"  style="color:var(--orange)">0</div><div class="lbl">跳过/未识别</div></div>
+    <div class="si"><div class="val" id="s-price" style="color:var(--blue)">¥0</div><div class="lbl">票价合计</div></div>
+    <div class="si"><div class="val" id="s-person" style="color:var(--purple);font-size:16px">-</div><div class="lbl">乘车人</div></div>
+  </div>
+
+  <!-- 图表 -->
+  <div id="chart-sec">
+    <div class="cg">
+      <div class="cc"><h3>📅 按月份票价统计（元）</h3><div class="cw"><canvas id="c-month"></canvas></div></div>
+      <div class="cc"><h3>🚉 热门路线 Top 8</h3><div class="cw"><canvas id="c-route"></canvas></div></div>
+      <div class="cc"><h3>🚆 车次类型分布</h3><div class="cw"><canvas id="c-type"></canvas></div></div>
+      <div class="cc"><h3>💺 席别分布</h3><div class="cw"><canvas id="c-seat"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- 结果表格 -->
+  <div class="card" id="result-card">
+    <div class="card-hd">
+      <h2>📋 解析结果</h2>
+      <span id="row-count" style="font-size:13px;color:var(--muted)"></span>
+    </div>
+    <div id="search-bar">
+      <input type="text" id="search-input" placeholder="搜索：车站、车次、姓名..."/>
+      <select class="fsel" id="f-type">
+        <option value="">全部车次</option>
+        <option value="G">G 高铁</option>
+        <option value="C">C 城际</option>
+        <option value="D">D 动车</option>
+        <option value="K">K 快速</option>
+        <option value="Z">Z 直达</option>
+        <option value="T">T 特快</option>
+      </select>
+      <select class="fsel" id="f-seat"><option value="">全部席别</option></select>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead id="t-head"></thead><tbody id="t-body"></tbody></table>
+    </div>
+    <div id="tbl-foot">
+      <span id="f-count"></span>
+      <span id="f-sum"></span>
+    </div>
+  </div>
+</main>
+
+<!-- 详情弹窗 -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="mo-hd">
+      <h3 id="mo-title">发票详情</h3>
+      <button class="mo-close" id="mo-close">✕</button>
+    </div>
+    <div class="mo-bd" id="mo-body"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// 状态
+// ═══════════════════════════════════════════════
+let selFiles=[], allRec=[], filtRec=[], fields=[];
+let sortCol="乘车日期", sortDir="asc", charts={};
+
+const COLS=["文件名","出发站","到达站","车次","乘车日期","开车时间",
+            "车厢号","座位号","席别","票价(元)","乘车人","备注","操作"];
+
+// ═══════════════════════════════════════════════
+// DOM
+// ═══════════════════════════════════════════════
+const $=id=>document.getElementById(id);
+const dz=$("dropzone"), fi=$("file-input"), flist=$("file-list");
+const btnParse=$("btn-parse"), btnCsv=$("btn-dl-csv"),
+      btnXls=$("btn-dl-excel"), btnClear=$("btn-clear");
+const statusMsg=$("status-msg"), pbWrap=$("prog-wrap"),
+      pbFill=$("pb-fill"), pbText=$("prog-text");
+const summary=$("summary"), chartSec=$("chart-sec"), resultCard=$("result-card");
+const searchBar=$("search-bar"), searchInput=$("search-input");
+const fType=$("f-type"), fSeat=$("f-seat");
+const thead=$("t-head"), tbody=$("t-body");
+const rowCount=$("row-count"), fCount=$("f-count"), fSum=$("f-sum");
+const overlay=$("overlay"), moTitle=$("mo-title"), moBody=$("mo-body");
+
+// ═══════════════════════════════════════════════
+// 文件选择
+// ═══════════════════════════════════════════════
+fi.addEventListener("change",()=>addFiles([...fi.files]));
+dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("over")});
+dz.addEventListener("dragleave",()=>dz.classList.remove("over"));
+dz.addEventListener("drop",e=>{
+  e.preventDefault(); dz.classList.remove("over");
+  addFiles([...e.dataTransfer.files].filter(f=>f.name.toLowerCase().endsWith(".pdf")));
+});
+function addFiles(files){
+  for(const f of files)
+    if(!selFiles.find(x=>x.name===f.name&&x.size===f.size)) selFiles.push(f);
+  renderFList(); fi.value="";
+}
+function removeFile(i){ selFiles.splice(i,1); renderFList(); }
+function renderFList(){
+  flist.innerHTML="";
+  selFiles.forEach((f,i)=>{
+    const d=document.createElement("div"); d.className="fi";
+    d.innerHTML=`<span>📄</span>
+      <span class="fi-name" title="${esc(f.name)}">${esc(f.name)}</span>
+      <span class="fi-size">${fmtSz(f.size)}</span>
+      <span class="fi-st" id="fs${i}"></span>
+      <button class="fi-rm" onclick="removeFile(${i})">✕</button>`;
+    flist.appendChild(d);
+  });
+  btnParse.disabled=selFiles.length===0;
+  statusMsg.textContent=selFiles.length?`已选 ${selFiles.length} 个文件`:"";
+}
+
+// ═══════════════════════════════════════════════
+// 逐文件解析
+// ═══════════════════════════════════════════════
+btnParse.addEventListener("click",async()=>{
+  if(!selFiles.length) return;
+  btnParse.disabled=true; btnCsv.disabled=true; btnXls.disabled=true;
+  pbWrap.style.display="block"; pbFill.style.width="0%";
+  statusMsg.textContent=""; allRec=[];
+
+  for(let i=0;i<selFiles.length;i++){
+    const f=selFiles[i];
+    pbFill.style.width=Math.round(i/selFiles.length*100)+"%";
+    pbText.textContent=`解析中 (${i+1}/${selFiles.length}): ${f.name}`;
+    const st=$("fs"+i);
+    if(st){st.textContent="…";st.style.color="var(--muted)";}
+    try{
+      const fd=new FormData(); fd.append("file",f);
+      const r=await fetch("/api/parse_one",{method:"POST",body:fd});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const d=await r.json();
+      fields=d.fields; allRec.push(d.record);
+      if(st){st.textContent=d.record["车次"]?"✓":"⚠";
+        st.style.color=d.record["车次"]?"var(--green)":"var(--orange)";}
+    }catch(e){
+      const rec={}; (fields.length?fields:["文件名","备注"]).forEach(k=>rec[k]="");
+      rec["文件名"]=f.name; rec["备注"]="解析失败:"+e.message;
+      allRec.push(rec);
+      if(st){st.textContent="✗";st.style.color="var(--red)";}
+    }
+  }
+  pbFill.style.width="100%"; pbText.textContent="全部解析完成";
+  setTimeout(()=>pbWrap.style.display="none",900);
+
+  buildSeatOpts(allRec);
+  renderSummary(allRec);
+  applyFilter();
+  renderCharts(allRec);
+  btnCsv.disabled=false; btnXls.disabled=false;
+  statusMsg.textContent=`解析完成，共 ${allRec.length} 条`;
+});
+
+// ═══════════════════════════════════════════════
+// 清空
+// ═══════════════════════════════════════════════
+btnClear.addEventListener("click",()=>{
+  selFiles=[]; allRec=[]; filtRec=[];
+  renderFList();
+  thead.innerHTML=""; tbody.innerHTML="";
+  resultCard.style.display="none";
+  summary.style.display="none";
+  chartSec.style.display="none";
+  searchBar.style.display="none";
+  btnCsv.disabled=true; btnXls.disabled=true;
+  statusMsg.textContent="";
+  Object.values(charts).forEach(c=>c&&c.destroy&&c.destroy()); charts={};
+});
+
+// ═══════════════════════════════════════════════
+// 统计
+// ═══════════════════════════════════════════════
+function renderSummary(recs){
+  const ok=recs.filter(r=>r["车次"]).length;
+  const total=recs.reduce((s,r)=>s+(parseFloat(r["票价(元)"])||0),0);
+  const persons=[...new Set(recs.map(r=>r["乘车人"]).filter(Boolean))];
+  $("s-total").textContent=recs.length;
+  $("s-ok").textContent=ok;
+  $("s-skip").textContent=recs.length-ok;
+  $("s-price").textContent="¥"+total.toFixed(2);
+  $("s-person").textContent=persons.length?persons.join("、"):"-";
+  summary.style.display="flex";
+}
+
+// ═══════════════════════════════════════════════
+// 筛选
+// ═══════════════════════════════════════════════
+function buildSeatOpts(recs){
+  const seats=[...new Set(recs.map(r=>r["席别"]).filter(Boolean))].sort();
+  fSeat.innerHTML='<option value="">全部席别</option>';
+  seats.forEach(s=>fSeat.insertAdjacentHTML("beforeend",
+    `<option value="${esc(s)}">${esc(s)}</option>`));
+}
+searchInput.addEventListener("input",applyFilter);
+fType.addEventListener("change",applyFilter);
+fSeat.addEventListener("change",applyFilter);
+
+function applyFilter(){
+  const kw=searchInput.value.trim().toLowerCase();
+  const ft=fType.value, fs=fSeat.value;
+  filtRec=allRec.filter(r=>{
+    if(ft&&!(r["车次"]||"").toUpperCase().startsWith(ft)) return false;
+    if(fs&&r["席别"]!==fs) return false;
+    if(kw){
+      const hay=[r["出发站"],r["到达站"],r["车次"],r["乘车人"],r["文件名"],r["备注"]]
+        .join(" ").toLowerCase();
+      if(!hay.includes(kw)) return false;
+    }
+    return true;
+  });
+  sortRec(); renderTable();
+}
+function sortRec(){
+  filtRec.sort((a,b)=>{
+    let av=a[sortCol]||"", bv=b[sortCol]||"";
+    if(sortCol==="票价(元)"){av=parseFloat(av)||0;bv=parseFloat(bv)||0;
+      return sortDir==="asc"?av-bv:bv-av;}
+    return sortDir==="asc"?String(av).localeCompare(String(bv),"zh")
+                          :String(bv).localeCompare(String(av),"zh");
+  });
+}
+
+// ═══════════════════════════════════════════════
+// 表格
+// ═══════════════════════════════════════════════
+function renderTable(){
+  thead.innerHTML="<tr>"+COLS.map(c=>{
+    if(c==="操作") return `<th style="cursor:default;width:60px"></th>`;
+    const cls=c===sortCol?sortDir:"";
+    return `<th class="${cls}" onclick="setSort('${c}')">${esc(c)}<span class="sa"></span></th>`;
+  }).join("")+"</tr>";
+
+  if(!filtRec.length){
+    tbody.innerHTML=`<tr><td colspan="${COLS.length}" class="no-data">暂无数据</td></tr>`;
+  } else {
+    tbody.innerHTML=filtRec.map((row,i)=>"<tr>"+COLS.map(col=>{
+      const v=row[col]||"";
+      if(col==="操作")    return `<td><button class="act-btn" onclick="showDetail(${i})">详情</button></td>`;
+      if(col==="车次")    return `<td>${trainBadge(v)}</td>`;
+      if(col==="备注")    return `<td>${noteTags(v)||dash()}</td>`;
+      if(col==="文件名")  return `<td class="td-file" title="${esc(v)}">${esc(v)}</td>`;
+      if(col==="票价(元)"&&v) return `<td class="td-price">¥${esc(v)}</td>`;
+      return `<td>${esc(v)||dash()}</td>`;
+    }).join("")+"</tr>").join("");
+  }
+  const tot=filtRec.reduce((s,r)=>s+(parseFloat(r["票价(元)"])||0),0);
+  rowCount.textContent=`共 ${allRec.length} 条`;
+  fCount.textContent=`筛选后 ${filtRec.length} 条`;
+  fSum.textContent=filtRec.length?`合计 ¥${tot.toFixed(2)}`:"";
+  resultCard.style.display="block";
+  searchBar.style.display="flex";
+}
+function setSort(col){
+  sortDir=sortCol===col?(sortDir==="asc"?"desc":"asc"):"asc";
+  sortCol=col; applyFilter();
+}
+function dash(){return `<span style="color:var(--muted)">-</span>`;}
+
+// ═══════════════════════════════════════════════
+// 详情弹窗
+// ═══════════════════════════════════════════════
+function showDetail(i){
+  const r=filtRec[i];
+  moTitle.textContent="📄 "+(r["文件名"]||"发票详情");
+  const items=[
+    {l:"出发站",v:r["出发站"]},{l:"到达站",v:r["到达站"]},
+    {l:"车次",v:r["车次"]},{l:"乘车日期",v:r["乘车日期"]},
+    {l:"开车时间",v:r["开车时间"]},{l:"票价",v:r["票价(元)"]?"¥"+r["票价(元)"]:""},
+    {l:"车厢号",v:r["车厢号"]},{l:"座位号",v:r["座位号"]},
+    {l:"席别",v:r["席别"]},{l:"乘车人",v:r["乘车人"]},
+    {l:"证件号（脱敏）",v:r["证件号(脱敏)"]},{l:"开票日期",v:r["开票日期"]},
+    {l:"发票号码",v:r["发票号码"],f:1},
+    {l:"电子客票号",v:r["电子客票号"],f:1},
+    {l:"备注",v:r["备注"],f:1},
+  ];
+  moBody.innerHTML=`<div class="dg">`+items.map(it=>
+    `<div class="di${it.f?" full":""}">
+      <div class="lbl">${esc(it.l)}</div>
+      <div class="val">${esc(it.v||"-")}</div>
+    </div>`).join("")+"</div>";
+  overlay.classList.add("open");
+}
+$("mo-close").onclick=()=>overlay.classList.remove("open");
+overlay.addEventListener("click",e=>{if(e.target===overlay)overlay.classList.remove("open");});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")overlay.classList.remove("open");});
+
+// ═══════════════════════════════════════════════
+// 图表
+// ═══════════════════════════════════════════════
+function renderCharts(recs){
+  chartSec.style.display="block";
+  Object.values(charts).forEach(c=>c&&c.destroy&&c.destroy()); charts={};
+
+  // 按月票价
+  const mMap={};
+  recs.forEach(r=>{
+    const m=(r["乘车日期"]||"").match(/(\d{4})年(\d{1,2})月/);
+    if(!m) return;
+    const k=m[1]+"-"+m[2].padStart(2,"0");
+    mMap[k]=(mMap[k]||0)+(parseFloat(r["票价(元)"])||0);
+  });
+  const mK=Object.keys(mMap).sort();
+  charts.month=new Chart($("c-month"),{type:"bar",data:{
+    labels:mK,datasets:[{label:"票价(元)",data:mK.map(k=>+mMap[k].toFixed(2)),
+      backgroundColor:"rgba(22,119,255,.75)",borderRadius:5,borderSkipped:false}]
+  },options:opts1()});
+
+  // 热门路线
+  const rMap={};
+  recs.forEach(r=>{
+    if(!r["出发站"]||!r["到达站"]) return;
+    const k=r["出发站"]+"→"+r["到达站"]; rMap[k]=(rMap[k]||0)+1;
+  });
+  const top8=Object.entries(rMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  charts.route=new Chart($("c-route"),{type:"bar",data:{
+    labels:top8.map(x=>x[0]),datasets:[{label:"次",data:top8.map(x=>x[1]),
+      backgroundColor:"rgba(82,196,26,.75)",borderRadius:5,borderSkipped:false}]
+  },options:{...opts1(),indexAxis:"y"}});
+
+  // 车次类型
+  const tMap={G:0,C:0,D:0,K:0,Z:0,T:0,"其他":0};
+  recs.forEach(r=>{
+    const t=(r["车次"]||"")[0]?.toUpperCase();
+    if(t&&tMap[t]!==undefined) tMap[t]++; else tMap["其他"]++;
+  });
+  const tK=Object.keys(tMap).filter(k=>tMap[k]>0);
+  const PIE_C=["#1677ff","#fa8c16","#52c41a","#ff4d4f","#722ed1","#13c2c2","#8c8c8c"];
+  charts.type=new Chart($("c-type"),{type:"doughnut",data:{
+    labels:tK,datasets:[{data:tK.map(k=>tMap[k]),backgroundColor:PIE_C,borderWidth:2,borderColor:"#fff"}]
+  },options:optsD()});
+
+  // 席别
+  const sMap={};
+  recs.forEach(r=>{const s=r["席别"]||"未知"; sMap[s]=(sMap[s]||0)+1;});
+  const sK=Object.keys(sMap);
+  charts.seat=new Chart($("c-seat"),{type:"doughnut",data:{
+    labels:sK,datasets:[{data:sK.map(k=>sMap[k]),backgroundColor:PIE_C,borderWidth:2,borderColor:"#fff"}]
+  },options:optsD()});
+}
+function opts1(){return{responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{display:false}},
+  scales:{y:{beginAtZero:true,grid:{color:"#f0f0f0"}},x:{grid:{display:false}}}};}
+function optsD(){return{responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{position:"right",labels:{boxWidth:12,font:{size:12}}}}};}
+
+// ═══════════════════════════════════════════════
+// 导出
+// ═══════════════════════════════════════════════
+btnCsv.addEventListener("click",async()=>{
+  if(!allRec.length) return;
+  const r=await fetch("/api/download_csv",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({records:allRec})});
+  dlBlob(await r.blob(),"tickets.csv");
+});
+btnXls.addEventListener("click",async()=>{
+  if(!allRec.length) return;
+  const orig=btnXls.innerHTML;
+  btnXls.disabled=true; btnXls.textContent="⏳ 生成中...";
+  try{
+    const r=await fetch("/api/download_excel",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({records:allRec})});
+    if(!r.ok){const j=await r.json();alert("导出失败："+j.error);return;}
+    dlBlob(await r.blob(),"tickets.xlsx");
+  }finally{btnXls.disabled=false;btnXls.innerHTML=orig;}
+});
+function dlBlob(blob,name){
+  const u=URL.createObjectURL(blob);
+  Object.assign(document.createElement("a"),{href:u,download:name}).click();
+  setTimeout(()=>URL.revokeObjectURL(u),2000);
+}
+
+// ═══════════════════════════════════════════════
+// 工具
+// ═══════════════════════════════════════════════
+function trainBadge(t){
+  if(!t) return `<span class="badge bs">-</span>`;
+  const c=t[0].toUpperCase();
+  const cls=c==="G"?"bg":c==="C"?"bc":c==="D"?"bd":
+    (c==="K"||c==="Z"||c==="T")?"bk":"bo";
+  return `<span class="badge ${cls}">${esc(t)}</span>`;
+}
+function noteTags(note){
+  if(!note) return "";
+  return note.split("；").map(n=>{
+    const cls="nt"+(n.includes("学生")?" student":"");
+    return `<span class="${cls}">${esc(n)}</span>`;
+  }).join("");
+}
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function fmtSz(b){
+  if(b<1024) return b+" B";
+  if(b<1048576) return (b/1024).toFixed(1)+" KB";
+  return (b/1048576).toFixed(1)+" MB";
+}
+</script>
+</body>
+</html>
