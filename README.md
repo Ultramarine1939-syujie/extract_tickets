@@ -6,7 +6,7 @@
 
 批量解析国铁电子客票 PDF，自动提取车次、票价、行程等信息，支持导出 CSV / Excel。
 
-![演示截图](https://via.placeholder.com/800x400/1677ff/ffffff?text=Web+界面预览)
+![img](img.png?text=Web+界面预览)
 
 ---
 
