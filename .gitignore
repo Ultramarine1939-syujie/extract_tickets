@@ -5,6 +5,7 @@ tickets.xlsx       # Excel 导出
 *.workbuddy/       # 个人工作记忆
 .workbuddy
 .trae
+tickets
 
 
 # ── Python ────────────────────────────────────────────────────

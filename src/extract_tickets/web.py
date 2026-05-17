@@ -10,6 +10,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from .config import AppConfig
 from .constants import ALLOWED_EXTENSIONS, FIELDNAMES
 from .export import build_csv_bytes, build_excel_bytes
+from .importer import SUPPORTED_IMPORT_EXTENSIONS, import_table_bytes
 from .parser import process_pdf_bytes
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -96,6 +97,22 @@ def create_app(config: AppConfig | None = None) -> Flask:
             download_name="tickets.xlsx",
         )
 
+    @app.route("/api/import_table", methods=["POST"])
+    def api_import_table():
+        """导入旧 CSV / Excel 表格并返回标准记录。"""
+
+        file = request.files.get("file")
+        if not file:
+            return jsonify({"error": "未收到文件"}), 400
+        if not _is_import_table(file.filename):
+            return jsonify({"error": "仅支持 CSV、XLSX 或 XLSM 表格"}), 400
+
+        try:
+            records = import_table_bytes(file.read(), file.filename)
+        except (RuntimeError, UnicodeDecodeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"records": records, "fields": FIELDNAMES})
+
     @app.route("/api/download", methods=["POST"])
     def api_download():
         return api_download_csv()
@@ -105,6 +122,10 @@ def create_app(config: AppConfig | None = None) -> Flask:
 
 def _is_pdf(filename: str | None) -> bool:
     return bool(filename and os.path.splitext(filename.lower())[1] in ALLOWED_EXTENSIONS)
+
+
+def _is_import_table(filename: str | None) -> bool:
+    return bool(filename and os.path.splitext(filename.lower())[1] in SUPPORTED_IMPORT_EXTENSIONS)
 
 
 def _records_from_request() -> list[dict]:
